@@ -1,0 +1,43 @@
+version: "3.5"
+
+networks:
+  ipvlan0:
+    name: ipvlan0
+    driver: ipvlan  # "ipvlan" for wifi interface, "macvlan" for eth interface
+    driver_opts:
+      parent: wlp82s0  # I happen to be using a wifi interface
+    ipam:
+      config:
+        - subnet: 192.168.0.0/24
+          gateway: 192.168.0.1
+          ip_range: 192.168.0.64/26 # 192.168.0.65 - 192.168.0.126
+          aux_addresses:
+            host: 192.168.0.64 # host's docker-vlanbr interface address
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    user: 0:0  # root user b/c nvidia/nvml permissions
+    networks:
+      ipvlan0:
+        ipv4_address: 192.168.0.90
+    volumes:
+      - /srv/jellyfin/cache:/cache
+      - /srv/jellyfin/config:/config
+      - /srv/jellyfin/media:/media:ro
+    ports:
+      - 8096:8096      # http
+      - 8920:8920      # https
+      - 7359:7359/udp  # local network discovery
+      - 1900:1900/udp  # service discovery (DNLA)
+    environment:
+      - TZ=America/Chicago
+      - JELLYFIN_PublishedServerUrl=192.168.0.90
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    restart: unless-stopped
